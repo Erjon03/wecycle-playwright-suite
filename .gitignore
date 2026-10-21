@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# secrets — only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.auth/
+
+# misc
+*.log
+.DS_Store

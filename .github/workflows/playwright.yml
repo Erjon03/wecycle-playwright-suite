@@ -1,0 +1,95 @@
+name: WeCycle storefront tests
+
+on:
+  pull_request: # smoke suite on every PR
+  workflow_dispatch: # manual run: full regression, or only tests matching "grep"
+    inputs:
+      grep:
+        description: 'Only run tests matching (e.g. @smoke). Empty = all tests'
+        required: false
+  # Nightly full regression — enable once the first smoke run is green:
+  # schedule:
+  #   - cron: '0 3 * * *'
+
+# one run at a time against the shop: a new run waits until the running one has finished
+concurrency:
+  group: wecycle-storefront-tests
+  cancel-in-progress: false
+
+jobs:
+  storefront:
+    name: Tests (shard ${{ matrix.shard }}/2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble # keep in sync with @playwright/test
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      CI: 'true'
+      PROJECT: wecycle
+      BASE_URL: ${{ vars.BASE_URL }}
+      HTTP_USERNAME: ${{ secrets.HTTP_USERNAME }}
+      HTTP_PASSWORD: ${{ secrets.HTTP_PASSWORD }}
+      ADMIN_CLIENT_ID: ${{ secrets.ADMIN_CLIENT_ID }}
+      ADMIN_CLIENT_SECRET: ${{ secrets.ADMIN_CLIENT_SECRET }}
+      ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      SW_ACCESS_KEY: ${{ secrets.SW_ACCESS_KEY }}
+      NEW_ACCOUNT_PASSWORD: ${{ secrets.NEW_ACCOUNT_PASSWORD }}
+      PROMOTION_CODE: ${{ secrets.PROMOTION_CODE }}
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check configuration
+        run: |
+          if [ -z "$BASE_URL" ]; then echo "::error::repository variable BASE_URL is not set"; exit 1; fi
+          if [ -z "$NEW_ACCOUNT_PASSWORD" ]; then echo "::error::repository secret NEW_ACCOUNT_PASSWORD is not set"; exit 1; fi
+      - name: Run tests
+        run: |
+          GREP="${{ github.event.inputs.grep }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then GREP="@smoke"; fi
+          npx playwright test ${GREP:+--grep "$GREP"} --shard=${{ matrix.shard }}/2
+      # blob report = this shard's results incl. traces/screenshots/videos, merged in the next job
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: blob-report/
+          retention-days: 1
+
+  merge-reports:
+    name: Merge reports
+    # runs even when tests failed, but not when the run was cancelled
+    if: ${{ !cancelled() }}
+    needs: storefront
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+      # only combines the shard results, no tests run here
+      - name: Merge into one HTML + JUnit report
+        run: npx playwright merge-reports --reporter html,junit ./all-blob-reports
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: playwright-report/junit.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
