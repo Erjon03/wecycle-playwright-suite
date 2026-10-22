@@ -7,9 +7,9 @@ on:
       grep:
         description: 'Only run tests matching (e.g. @smoke). Empty = all tests'
         required: false
-  # Nightly full regression — enable once the first smoke run is green:
-  # schedule:
-  #   - cron: '0 3 * * *'
+  # daily full regression (cron is UTC: 07:00 Berlin in summer, 06:00 in winter)
+  schedule:
+    - cron: '0 5 * * *'
 
 # one run at a time against the shop: a new run waits until the running one has finished
 concurrency:

@@ -179,7 +179,7 @@ WeCycle-only features (bicycle leasing, store pickup, Usercentrics consent, …)
 - **Pull requests** → smoke suite (`@smoke`).
 - **Manual run** (*Actions → WeCycle storefront tests → Run workflow*) → full regression, or only
   tests matching the optional `grep` input.
-- **Nightly** → prepared, commented out until the suite is stable.
+- **Daily** → full suite every day at 05:00 UTC (07:00 Berlin summer time, 06:00 winter time).
 - Tests are split across 2 shards; one merged HTML report + JUnit file is uploaded as the
   `playwright-report` artifact (screenshots, videos and traces of failures included).
 - Only one run at a time (`concurrency`): a new run waits until the running one has finished.
