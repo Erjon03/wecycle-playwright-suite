@@ -220,3 +220,21 @@ const config: ProjectConfig = {
 };
 
 export default config;
+
+/**
+ * Data for the WeCycle-only tests in tests/client/ (not part of the core ProjectConfig).
+ * Verified against the storefront HTML on 2026-10-26.
+ */
+export const wecycleClientData = {
+  // bike with Consors financing tab ("Finanzierung") on the product page
+  financingProductPath: '/Cube-Editor-SLX-City-Fahrrad-ammolite-reflex-2026/493684',
+  financingMonthlyRateLabel: /Monatliche Rate/,
+  // "Artikel pro Seite" options; the category has more than 48 products
+  listingLimitPath: '/zubehoer/',
+  listingDefaultLimit: 24,
+  listingLimit: 48,
+  // some boxes on the sale page show old price + "-23 %"
+  salePath: '/Sale/',
+  // client-side "lettersOnly" check on the first name
+  lettersOnlyMessage: 'Bitte verwende nur Buchstaben.',
+} as const;

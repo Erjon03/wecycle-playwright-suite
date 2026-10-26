@@ -4,6 +4,7 @@
  */
 import { test as core, expect } from '../fixtures';
 import { BasePage } from '../pages/BasePage';
+import { WecycleListingPage, WecycleProductPage } from './WecyclePages';
 
 /** Example client page object (e.g. a custom "store locator" plugin). */
 export class ExampleCustomPage extends BasePage {
@@ -18,10 +19,14 @@ export class ExampleCustomPage extends BasePage {
 
 type ClientFixtures = {
   exampleCustomPage: ExampleCustomPage;
+  wecycleProduct: WecycleProductPage;
+  wecycleListing: WecycleListingPage;
 };
 
 export const test = core.extend<ClientFixtures>({
   exampleCustomPage: async ({ page, cfg }, use) => use(new ExampleCustomPage(page, cfg)),
+  wecycleProduct: async ({ page, cfg }, use) => use(new WecycleProductPage(page, cfg)),
+  wecycleListing: async ({ page, cfg }, use) => use(new WecycleListingPage(page, cfg)),
 });
 
 export { expect };
