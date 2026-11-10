@@ -10,9 +10,13 @@ node_modules/
 test-results/
 playwright-report/
 blob-report/
+run-summary/
 playwright/.cache/
 .auth/
 
 # misc
 *.log
 .DS_Store
+
+# central QA reporting (results.json + summary.json)
+qa-report/

@@ -14,13 +14,17 @@
     "test:ui": "playwright test --ui",
     "test:list": "playwright test --list",
     "report": "playwright show-report",
+    "report:combined": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/combine-run-summaries.ts",
     "typecheck": "tsc --noEmit",
-    "install:browsers": "playwright install --with-deps chromium"
+    "install:browsers": "playwright install --with-deps chromium",
+    "summary": "npx tsx scripts/make-summary.ts",
+    "test:summary": "npx tsx --test scripts/make-summary.test.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.10.0",
     "dotenv": "^17.2.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.0"
   },
   "engines": {

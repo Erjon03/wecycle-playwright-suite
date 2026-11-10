@@ -1,0 +1,13 @@
+{
+  "config": { "rootDir": "tests" },
+  "suites": [
+    { "title": "smoke/feed.spec.ts", "file": "smoke/feed.spec.ts", "specs": [], "suites": [
+      { "title": "S03 Feed @smoke", "file": "smoke/feed.spec.ts", "specs": [
+        { "title": "S03 feed loads", "file": "smoke/feed.spec.ts", "tests": [{ "status": "expected", "results": [{ "status": "passed" }] }] },
+        { "title": "S06 location audience", "file": "smoke/feed.spec.ts", "tests": [{ "status": "skipped", "results": [{ "status": "skipped" }] }] }
+      ] }
+    ] }
+  ],
+  "errors": [],
+  "stats": { "startTime": "2026-11-10T18:17:00.000Z", "duration": 11873.456, "expected": 2, "unexpected": 0, "flaky": 0, "skipped": 1 }
+}

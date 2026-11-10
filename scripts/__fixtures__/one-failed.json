@@ -1,0 +1,16 @@
+{
+  "config": { "rootDir": "tests" },
+  "suites": [
+    { "title": "smoke/documents.spec.ts", "file": "smoke/documents.spec.ts", "specs": [], "suites": [
+      { "title": "S09 Document download allowed (SX employee) @smoke", "file": "smoke/documents.spec.ts", "specs": [
+        { "title": "S09 SX document file -> 302 to signed blob", "file": "smoke/documents.spec.ts", "tests": [{ "status": "unexpected", "results": [
+          { "status": "failed", "error": { "message": "Error: first attempt" } },
+          { "status": "failed", "error": { "message": "\u001b[31mError: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: \u001b[32m302\u001b[39m\nReceived: \u001b[31m404\u001b[39m" } }
+        ] }] },
+        { "title": "S10 passes", "file": "smoke/documents.spec.ts", "tests": [{ "status": "expected", "results": [{ "status": "passed" }] }] }
+      ] }
+    ] }
+  ],
+  "errors": [],
+  "stats": { "duration": 7000.6, "expected": 1, "unexpected": 1, "flaky": 0, "skipped": 0 }
+}

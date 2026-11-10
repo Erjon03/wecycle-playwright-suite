@@ -1,15 +1,18 @@
+# Central report runs at 19:00 UTC and reads today's (UTC) uploads; each run must finish by 18:55 UTC. Last deploys are at 18:00 local.
+#
+# Public repository: no artifacts are uploaded (anyone with a GitHub account could download them),
+# no traces/videos/screenshots in CI, and URL + credentials come only from secrets (never `vars`).
 name: WeCycle storefront tests
 
 on:
-  pull_request: # smoke suite on every PR
+  pull_request: # smoke suite on every PR (not uploaded to the central report)
   workflow_dispatch: # manual run: full regression, or only tests matching "grep"
     inputs:
       grep:
         description: 'Only run tests matching (e.g. @smoke). Empty = all tests'
         required: false
-  # daily full regression (cron is UTC: 07:00 Berlin in summer, 06:00 in winter)
   schedule:
-    - cron: '0 5 * * *'
+    - cron: '17 17 * * 1-5' # staging: weekdays 17:17 UTC
 
 # one run at a time against the shop: a new run waits until the running one has finished
 concurrency:
@@ -18,19 +21,15 @@ concurrency:
 
 jobs:
   storefront:
-    name: Tests (shard ${{ matrix.shard }}/2)
+    name: Tests (staging)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90 # starts 17:17 UTC, must be done by 18:55 UTC
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble # keep in sync with @playwright/test
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     env:
       CI: 'true'
-      PROJECT: wecycle
-      BASE_URL: ${{ vars.BASE_URL }}
+      PROJECT: wecycle # shop profile (projects/wecycle.ts) and project slug of the central report
+      BASE_URL: ${{ secrets.BASE_URL }}
       HTTP_USERNAME: ${{ secrets.HTTP_USERNAME }}
       HTTP_PASSWORD: ${{ secrets.HTTP_PASSWORD }}
       ADMIN_CLIENT_ID: ${{ secrets.ADMIN_CLIENT_ID }}
@@ -50,46 +49,43 @@ jobs:
       - run: npm ci
       - name: Check configuration
         run: |
-          if [ -z "$BASE_URL" ]; then echo "::error::repository variable BASE_URL is not set"; exit 1; fi
+          if [ -z "$BASE_URL" ]; then echo "::error::repository secret BASE_URL is not set"; exit 1; fi
           if [ -z "$NEW_ACCOUNT_PASSWORD" ]; then echo "::error::repository secret NEW_ACCOUNT_PASSWORD is not set"; exit 1; fi
+      # reporters (CI): list, qa-report/results.json, run summary on the run's summary page
       - name: Run tests
         run: |
           GREP="${{ github.event.inputs.grep }}"
           if [ "${{ github.event_name }}" = "pull_request" ]; then GREP="@smoke"; fi
-          npx playwright test ${GREP:+--grep "$GREP"} --shard=${{ matrix.shard }}/2
-      # blob report = this shard's results incl. traces/screenshots/videos, merged in the next job
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: blob-report-${{ matrix.shard }}
-          path: blob-report/
-          retention-days: 1
-
-  merge-reports:
-    name: Merge reports
-    # runs even when tests failed, but not when the run was cancelled
-    if: ${{ !cancelled() }}
-    needs: storefront
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - uses: actions/download-artifact@v4
-        with:
-          path: all-blob-reports
-          pattern: blob-report-*
-          merge-multiple: true
-      # only combines the shard results, no tests run here
-      - name: Merge into one HTML + JUnit report
-        run: npx playwright merge-reports --reporter html,junit ./all-blob-reports
+          npx playwright test ${GREP:+--grep "$GREP"}
         env:
-          PLAYWRIGHT_JUNIT_OUTPUT_FILE: playwright-report/junit.xml
-      - uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 14
+          RUN_GREP: ${{ github.event.inputs.grep }}
+
+      # central QA reporting: qa-report/results.json → qa-report/summary.json
+      - name: Build QA summary
+        if: always()
+        run: npm run summary
+        env:
+          PROJECT: wecycle
+          ENVIRONMENT: staging
+          OWNER: Erjon Januzaj
+          RUN_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      # → qa-reports/<project>/<environment>/<YYYY-MM-DD>/<HHMMSS>/ on Profihost.
+      # Skipped with a notice while PROFIHOST_HOST is not set; any upload problem is a warning, never a red run.
+      # PR smoke runs are not uploaded: the central report uses the latest run of the day.
+      - name: Upload to Profihost
+        if: always() && github.event_name != 'pull_request'
+        continue-on-error: true
+        env:
+          PROFIHOST_HOST: ${{ secrets.PROFIHOST_HOST }}
+          PROFIHOST_USER: ${{ secrets.PROFIHOST_USER }}
+          PROFIHOST_SSH_KEY: ${{ secrets.PROFIHOST_SSH_KEY }}
+          PROFIHOST_KNOWN_HOSTS: ${{ secrets.PROFIHOST_KNOWN_HOSTS }}
+          PROFIHOST_PORT: ${{ secrets.PROFIHOST_PORT }}
+        run: |
+          # the Playwright image may not ship the OpenSSH client
+          if [ -n "$PROFIHOST_HOST" ] && ! command -v sftp >/dev/null; then
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends openssh-client >/dev/null \
+              || echo "::warning::could not install openssh-client"
+          fi
+          bash scripts/upload-to-profihost.sh

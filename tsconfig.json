@@ -9,6 +9,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
       "@src/*": ["src/*"],
@@ -16,5 +17,5 @@
     },
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "projects/**/*.ts", "playwright.config.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "projects/**/*.ts", "scripts/**/*.ts", "playwright.config.ts"]
 }

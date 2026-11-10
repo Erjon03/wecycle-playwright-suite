@@ -34,24 +34,36 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: isCI,
+  // CI retries also detect flaky tests for the central QA report (keep >= 1)
   retries: isCI ? 2 : 0,
-  workers: isCI ? 2 : undefined,
+  // one CI job (no shards, public repo = no artifacts): 4 workers = the same shop load as the former 2 shards x 2 workers
+  workers: isCI ? 4 : undefined,
   // slow shops raise these in their profile (timeouts)
   timeout: cfg.timeouts?.test ?? 60_000,
   expect: { timeout: cfg.timeouts?.expect ?? 10_000 },
 
-  // CI: each shard writes a blob report; the merge-reports job turns them into one HTML + JUnit report
-  reporter: isCI ? [['list'], ['blob']] : [['list'], ['html', { open: 'on-failure' }]],
+  // qa-report/results.json feeds scripts/make-summary.ts → qa-report/summary.json (central QA report, uploaded in CI).
+  // run-summary/<project>_<date>_<time>.html/.md/.json: shareable overview, no URLs (in CI also on the run's summary page).
+  reporter: isCI
+    ? [['list'], ['json', { outputFile: 'qa-report/results.json' }], ['./src/reporting/RunSummaryReporter.ts']]
+    : [
+        ['list'],
+        ['html', { open: 'on-failure' }],
+        ['json', { outputFile: 'qa-report/results.json' }],
+        ['./src/reporting/RunSummaryReporter.ts'],
+      ],
 
-  metadata: { project: cfg.name, baseURL: cfg.baseURL },
+  // the JSON report copies metadata into results.json, which is uploaded in CI → no shop URL there
+  metadata: isCI ? { project: cfg.name } : { project: cfg.name, baseURL: cfg.baseURL },
 
   use: {
     baseURL: cfg.baseURL,
     httpCredentials: cfg.env.httpCredentials,
     locale: cfg.locale,
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // public repo: no traces/screenshots/videos in CI (they could show customer data); kept for local runs
+    trace: isCI ? 'off' : 'retain-on-failure',
+    screenshot: isCI ? 'off' : 'only-on-failure',
+    video: isCI ? 'off' : 'retain-on-failure',
     actionTimeout: cfg.timeouts?.action ?? 15_000,
     navigationTimeout: cfg.timeouts?.navigation ?? 30_000,
   },

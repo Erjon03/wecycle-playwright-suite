@@ -1,0 +1,14 @@
+{
+  "config": { "rootDir": "tests" },
+  "suites": [
+    { "title": "smoke/feed.spec.ts", "file": "smoke/feed.spec.ts", "specs": [], "suites": [
+      { "title": "S03 Feed @smoke", "file": "smoke/feed.spec.ts", "specs": [
+        { "title": "S03 feed loads", "file": "smoke/feed.spec.ts", "tests": [{ "status": "flaky", "results": [
+          { "status": "failed", "error": { "message": "Error: timeout" } }, { "status": "passed" }
+        ] }] }
+      ] }
+    ] }
+  ],
+  "errors": [],
+  "stats": { "duration": 5000, "expected": 3, "unexpected": 0, "flaky": 1, "skipped": 0 }
+}

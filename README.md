@@ -31,7 +31,7 @@ npm run test:ui                    # Playwright UI mode for debugging
 ```
 
 The storefront URL is never stored in the repo: it comes from `BASE_URL` in `.env` (locally) or the
-`BASE_URL` repository variable (CI). The suite refuses to start without it.
+`BASE_URL` repository secret (CI). The suite refuses to start without it.
 
 ---
 
@@ -65,7 +65,7 @@ The storefront URL is never stored in the repo: it comes from `BASE_URL` in `.en
 
 | Principle | How |
 |---|---|
-| **No hardcoded shop data** | Products, categories, search terms, routes, redirects, feature flags → `projects/wecycle.ts`. URL and secrets → `.env` / CI variables and secrets. |
+| **No hardcoded shop data** | Products, categories, search terms, routes, redirects, feature flags → `projects/wecycle.ts`. URL and secrets → `.env` / CI secrets. |
 | **Language independent** | Selectors use Shopware core classes, ids and form field names — never visible texts. Assertions use body classes (`is-ctl-checkout`) and URLs. |
 | **Theme overrides without forking** | `selectors` in the profile is deep-merged over `shopware67Selectors`. Override only the keys the WeCycle theme changes. |
 | **Feature flags** | Tests for features the shop does not have skip automatically (e.g. `features.currencySwitch = false`). |
@@ -176,23 +176,101 @@ WeCycle-only features (bicycle leasing, store pickup, Usercentrics consent, …)
 
 `.github/workflows/playwright.yml`:
 
-- **Pull requests** → smoke suite (`@smoke`).
+- **Scheduled** → full suite on weekdays (Mon–Fri) at **17:17 UTC** (18:17 Berlin winter time,
+  19:17 summer time), environment `staging`. The run must finish by 18:55 UTC (central report, see below).
 - **Manual run** (*Actions → WeCycle storefront tests → Run workflow*) → full regression, or only
   tests matching the optional `grep` input.
-- **Daily** → full suite every day at 05:00 UTC (07:00 Berlin summer time, 06:00 winter time).
-- Tests are split across 2 shards; one merged HTML report + JUnit file is uploaded as the
-  `playwright-report` artifact (screenshots, videos and traces of failures included).
-- Only one run at a time (`concurrency`): a new run waits until the running one has finished.
+- **Pull requests** → smoke suite (`@smoke`), not uploaded to the central report.
+- One job, 4 workers. Only one run at a time (`concurrency`): a new run waits until the running one has finished.
+- **The repository is public**, so:
+  - no artifacts are uploaded (anyone with a GitHub account could download them) — results are on the
+    run's summary page and in the central QA report;
+  - traces, videos and screenshots are off in CI (still on for local runs);
+  - URL and credentials come only from **secrets**, never from variables (variables are shown in plain text).
 
-Configuration (*Settings → Secrets and variables → Actions*):
+Configuration (*Settings → Secrets and variables → Actions → Secrets*):
 
-| Kind | Name |
+| Secret | Purpose |
 |---|---|
-| Variable | `BASE_URL` |
-| Secret | `NEW_ACCOUNT_PASSWORD`, `ADMIN_CLIENT_ID`, `ADMIN_CLIENT_SECRET` (or `ADMIN_USERNAME` / `ADMIN_PASSWORD`), optional `SW_ACCESS_KEY`, `PROMOTION_CODE`, `HTTP_USERNAME` / `HTTP_PASSWORD` |
+| `BASE_URL` | shop URL (required) |
+| `NEW_ACCOUNT_PASSWORD` | password of registered test customers (required) |
+| `ADMIN_CLIENT_ID` / `ADMIN_CLIENT_SECRET` (or `ADMIN_USERNAME` / `ADMIN_PASSWORD`) | Admin API (cleanup, stock) |
+| `SW_ACCESS_KEY`, `PROMOTION_CODE`, `HTTP_USERNAME` / `HTTP_PASSWORD` | optional |
+| `PROFIHOST_HOST`, `PROFIHOST_USER`, `PROFIHOST_SSH_KEY`, `PROFIHOST_KNOWN_HOSTS`, optional `PROFIHOST_PORT` | central QA reporting upload (see below) |
+
+## Central QA reporting
+
+Every scheduled or manual CI run is uploaded to Profihost; a central job builds the daily QA report at
+**19:00 UTC** from today's (UTC) uploads, using the **latest run of the day** per project/environment.
+
+1. **Run tests** — the JSON reporter writes `qa-report/results.json` (git-ignored).
+2. **Build QA summary** (`npm run summary`, always runs) — `scripts/make-summary.ts` writes
+   `qa-report/summary.json`: status (`PASSED` / `PASSED_WITH_FLAKY` / `FAILED`), counts, duration,
+   branch, commit, trigger, run link and the failed tests with their first error line.
+   Needs `PROJECT` (`wecycle`), `ENVIRONMENT` (`staging`) and `OWNER`.
+   A missing or unreadable `results.json`, or an error outside tests (e.g. setup), gives `FAILED`.
+   The script is shared ("Shared make-summary v1") — keep it identical across all QA repos.
+3. **Upload to Profihost** (`scripts/upload-to-profihost.sh`) — via `sftp -b` to
+   `qa-reports/wecycle/staging/<YYYY-MM-DD>/<HHMMSS>/` (date and time from the summary's `timestamp`, UTC):
+   `summary.json` and `results.json`. Upload problems only give a warning, never a red run.
+   The result (or the reason it failed) is shown on the run's summary page.
+
+Secrets for the upload:
+
+| Secret | Value |
+|---|---|
+| `PROFIHOST_HOST` | SFTP host. **While it is empty, the upload is skipped** (notice) and the pipeline stays green. |
+| `PROFIHOST_USER` | SFTP user |
+| `PROFIHOST_SSH_KEY` | ed25519 private key (whole file content) |
+| `PROFIHOST_KNOWN_HOSTS` | output of `ssh-keyscan <host>` (`ssh-keyscan -p <port> <host>` for a non-22 port); the host key is checked strictly |
+| `PROFIHOST_PORT` | optional, default 22 |
+
+If `PROFIHOST_HOST` is set but one of user / key / known-hosts is missing, the upload counts as failed (warning).
+
+**Re-run rule:** after a hotfix, re-run the suite by hand (*Run workflow*, `grep` empty), then re-run the
+central report job — it uses the latest run of the day.
+
+Local check:
+
+```bash
+npm run test:summary                                              # self-check of make-summary (fixtures)
+PROJECT=wecycle ENVIRONMENT=staging OWNER="Erjon Januzaj" npm run summary   # after a local test run
+```
 
 The workflow uses the official `mcr.microsoft.com/playwright` image — keep its version in sync with
 `@playwright/test`.
+
+## Run summary (status report)
+
+After every run, `src/reporting/RunSummaryReporter.ts` writes
+`run-summary/<project>_<date>_<time>.html` / `.md` / `.json`: totals (passed / failed / flaky / blocked / skipped),
+every test with status, file, browser and duration, and the first error line of each failure.
+At the top (and in the console) there is the team's status report per shop, ready to paste:
+
+```
+Project: WeCycle (staging)
+Tests run: 117
+Passed: 99
+Failed: 0
+Blocked/Skipped: 18 (15 blocked: page did not load in time, 3 skipped)
+Failed – already reported: 0
+Tickets: none
+```
+
+- **Blocked** = the test failed only because a page did not load in time (`page.goto` / `reload` /
+  `waitForURL` navigation timeout: slow or unreachable shop). It counts under Blocked/Skipped, not
+  Failed. Playwright itself (exit code, HTML report, CI status) still shows these tests as failed.
+- Passed includes flaky tests (passed on retry, noted in brackets).
+- With real failures, "Failed – already reported" and "Tickets" are `<fill in>`: fill them in after
+  triage (which failures are known bugs, which tickets) before posting.
+- The files are meant to be forwarded: URLs in errors become `<url>`, URL/credential env values
+  become `<redacted>`. `playwright test --list` writes no summary.
+- **Local**: written automatically by every `npx playwright test` run (`run-summary/` is git-ignored).
+- **CI**: shown on the run's summary page (no artifact: public repo).
+- **Combined**: `npm run report:combined` merges the latest run of each project found in
+  `run-summary/` (or a folder given as `npm run report:combined -- <folder>`) into
+  `run-summary/combined_<date>_<time>.html` / `.md` / `-report.txt` (the status reports, ready to paste).
+  Local only.
 
 ---
 
